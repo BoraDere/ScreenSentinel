@@ -6,7 +6,17 @@ import tkinter as tk
 from tkinter import messagebox
 import time
 
+THRESHOLD = 0.6
+
 running = True
+authorized_images = {
+    'Bora Dere': ['authorized_users/Bora_Dere_Front.jpg', 
+                  'authorized_users/Bora_Dere_Full_Left.jpg', 
+                  'authorized_users/Bora_Dere_Full_Right.jpg', 
+                  'authorized_users/Bora_Dere_Half_Left.jpg', 
+                  'authorized_users/Bora_Dere_Half_Right.jpg'],
+}
+authorized_encodings = {}
 
 # TODO: Exception handling on str_to_bool function, maybe display error message?
 # TODO: draw_frame in settings found to be redundant, because it will appear only for 10 seconds iff show_frame is True
@@ -50,13 +60,33 @@ def show_error_message(message: str) -> None:
     root.destroy()
 
 
+def update_authorized_encodings():
+    print('update')
+    for user, images in authorized_images.items():
+        authorized_encodings[user] = get_encodings(images)
+    print('done')
+
+
+def get_encodings(image_paths):
+    encodings = []
+
+    for path in image_paths:
+        image = face_recognition.load_image_file(path)
+        encoding = face_recognition.face_encodings(image)
+
+        if encoding:
+            encodings.append(encoding[0])
+        
+    return encodings
+
+
 def settings_reader(filename):
     with open(filename, 'r') as f:
         return json.load(f)
 
 
 def capture(camera, show_frame, capture_duration=10):
-    global running
+    global running, authorized_encodings
     cap = cv2.VideoCapture(camera)
     
     if not cap.isOpened():
@@ -77,8 +107,28 @@ def capture(camera, show_frame, capture_duration=10):
         
         rgb_frame = frame[:, :, ::-1]  # BGR to RGB conversion
         face_locations = face_recognition.face_locations(rgb_frame)
+        face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
-        # recognition part??
+        # recognition part
+
+        unauthorized_detected = False
+
+        for encoding in face_encodings:
+            matches = face_recognition.compare_faces(
+                [enc for sublist in authorized_encodings.values() for enc in sublist], 
+                encoding, 
+                tolerance=THRESHOLD
+            )
+
+            if not any(matches):
+                unauthorized_detected = True
+                break
+
+        if unauthorized_detected:
+            # change it from being an immediate action with window panes
+            print("unauth detected")
+            running = False
+            break
         
         if show_frame:
             for top, right, bottom, left in face_locations:
@@ -102,16 +152,18 @@ def capture_callback():
     show_frame = str_to_bool(settings['show_frame']) # exception handling
     capture(camera, show_frame)
     if running:  
-        sleep_time = 30  
-        elapsed = 0
-        while running and elapsed < sleep_time:  
-            time.sleep(1)  
-            elapsed += 1
-        if running:  
-            threading.Timer(30, capture_callback).start()
+        # sleep_time = 30  
+        # elapsed = 0
+        # while running and elapsed < sleep_time:  
+        #     time.sleep(1)  
+        #     elapsed += 1
+        # if running:  
+        #     threading.Timer(30, capture_callback).start()
+        threading.Timer(30, capture_callback).start()
 
 
 if __name__ == '__main__':
+    update_authorized_encodings()
     capture_callback()
     try:
         while running:
