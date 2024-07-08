@@ -5,10 +5,12 @@ import face_recognition
 import tkinter as tk
 from tkinter import messagebox
 import time
+import sys
 
 THRESHOLD = 0.6
 
 running = True
+process_current_frame = True
 authorized_images = {
     'Bora Dere': ['authorized_users/Bora_Dere_Front.jpg', 
                   'authorized_users/Bora_Dere_Full_Left.jpg', 
@@ -23,6 +25,7 @@ authorized_encodings = {}
 # TODO: to exe? is it the way to not running on lockscreen and terminating in a different way than it is now?
 # TODO: make settings_reader parse the arguments in he required format?
 # TODO: divide into different modules? main, capture, utils...
+# TODO: do camera check(s) before encoding update
 
 
 def str_to_bool(value: str) -> bool:
@@ -85,15 +88,15 @@ def settings_reader(filename):
         return json.load(f)
 
 
-def capture(camera, show_frame, capture_duration=10):
-    global running, authorized_encodings
+def capture(camera, show_frame, draw_frame, capture_duration=10):
+    global running, authorized_encodings, process_current_frame
+
     cap = cv2.VideoCapture(camera)
     
     if not cap.isOpened():
         message = f"{camera} numaralı kamera açılamadı. Bu kameranın sistemde var olduğuna emin olun."
         show_error_message(message)
-        running = False
-        return
+        sys.exit(message)
 
     start_time = time.time()
 
@@ -102,37 +105,42 @@ def capture(camera, show_frame, capture_duration=10):
         if not ret:
             message = f"{camera} numaralı kamera şu anda kullanımda veya başka bir hata oluştu."
             show_error_message(message)
-            running = False 
-            break
-        
-        rgb_frame = frame[:, :, ::-1]  # BGR to RGB conversion
-        face_locations = face_recognition.face_locations(rgb_frame)
-        face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+            sys.exit(message)
 
-        # recognition part
+        if process_current_frame:
+            small_frame = cv2.resize(frame, (0, 0), fx=.25, fy=.25)
+            rgb_small_frame = small_frame[:, :, ::-1]  # BGR to RGB conversion
+            face_locations = face_recognition.face_locations(rgb_small_frame, model='hog')
+            face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations, model='hog') # takes all the time
 
-        unauthorized_detected = False
+            # recognition part
 
-        for encoding in face_encodings:
-            matches = face_recognition.compare_faces(
-                [enc for sublist in authorized_encodings.values() for enc in sublist], 
-                encoding, 
-                tolerance=THRESHOLD
-            )
+            unauthorized_detected = False
 
-            if not any(matches):
-                unauthorized_detected = True
+            for encoding in face_encodings:
+                matches = face_recognition.compare_faces(
+                    [enc for sublist in authorized_encodings.values() for enc in sublist], 
+                    encoding, 
+                    tolerance=THRESHOLD,
+                )
+
+                if not any(matches):
+                    unauthorized_detected = True
+                    break
+
+            if unauthorized_detected:
+                # change it from being an immediate action with window panes
+                print("unauth detected")
+                running = False
                 break
-
-        if unauthorized_detected:
-            # change it from being an immediate action with window panes
-            print("unauth detected")
-            running = False
-            break
         
+        process_current_frame = not process_current_frame
+
         if show_frame:
-            for top, right, bottom, left in face_locations:
-                cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+            if draw_frame:
+                for top, right, bottom, left in face_locations:
+                    top *= 4; right *= 4; bottom *= 4; left *= 4 
+                    cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
             cv2.imshow('Webcam', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'): # for debugging purposes
                 break
@@ -150,7 +158,8 @@ def capture_callback():
     settings = settings_reader('settings.json')
     camera = settings['camera']
     show_frame = str_to_bool(settings['show_frame']) # exception handling
-    capture(camera, show_frame)
+    draw_frame = str_to_bool(settings['draw_frame']) # exception handling
+    capture(camera, show_frame, draw_frame)
     if running:  
         # sleep_time = 30  
         # elapsed = 0
