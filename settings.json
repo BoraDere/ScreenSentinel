@@ -1,5 +1,9 @@
 {
     "camera": 0,
-    "draw_frame": "True",
-    "show_frame": "True"
+    "show_frame": "True",
+    "count_limit": 20,
+    "block_multi_user": "False",
+    "user_image_count": 5,
+    "wait_time": 30,
+    "capture_duration": 10
 }
