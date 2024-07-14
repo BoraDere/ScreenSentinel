@@ -1,6 +1,5 @@
 import json
 import cv2
-import threading
 import face_recognition
 import tkinter as tk
 from tkinter import messagebox
@@ -16,13 +15,6 @@ AUTHORIZED_ENCODINGS_DIR = 'authorized_user_encodings'
 
 running = True
 process_current_frame = True
-# authorized_images = {
-#     'Bora Dere': ['authorized_users/Bora_Dere_Front.jpg', 
-#                   'authorized_users/Bora_Dere_Full_Left.jpg', 
-#                   'authorized_users/Bora_Dere_Full_Right.jpg', 
-#                   'authorized_users/Bora_Dere_Half_Left.jpg', 
-#                   'authorized_users/Bora_Dere_Half_Right.jpg'],
-# }
 authorized_encodings = {}
 
 # TODO: to exe? is it the way to not running on lockscreen and terminating in a different way than it is now?
@@ -98,85 +90,43 @@ def encode_face(face_image) -> list|None:
         return None
 
 
-# def get_encodings(image_paths: list[str]) -> list:
-#     """
-#     Function that encodes the images within given paths. Used for initialization purposes.
-
-#     Args:
-#         image_paths(list[str]): Paths of images.
-
-#     Returns:
-#         encodings: List of encodings. Neglects None results.
-#     """
-#     encodings = []
-
-#     for path in image_paths:
-#         image = face_recognition.load_image_file(path)
-#         encoding = face_recognition.face_encodings(image)
-
-#         if encoding:
-#             encodings.append(encoding[0])
-        
-#     return encodings
-
-
-# def update_authorized_encodings() -> None:
-#     """
-#     An initializer function for authorized users.
-#     """
-#     print('update')
-#     for user, images in authorized_images.items():
-#         authorized_encodings[user] = get_encodings(images)
-#     print('done')
-
-
 def load_or_generate_encodings():
-    # print("function starts")
     authorized_encodings = {}
+
     if os.path.exists(AUTHORIZED_ENCODINGS_DIR):
-        # print("in if loop")
-        # Load existing encodings
         for user_dir in os.listdir(AUTHORIZED_ENCODINGS_DIR):
-            # print(f'user_dir: {user_dir}')
             user_encodings = []
             user_path = os.path.join(AUTHORIZED_ENCODINGS_DIR, user_dir)
-            # print(f'user_path: {user_path}')
+
             for encoding_file in os.listdir(user_path):
                 with open(os.path.join(user_path, encoding_file), 'rb') as f:
                     encoding = pickle.load(f)
-                    # print(f'encoding: {encoding}')
                     user_encodings.append(encoding)
-            authorized_encodings[user_dir] = user_encodings
-        # print('if bitişi')
+
+            authorized_encodings[user_dir] = user_encodings            
     else:
-        # Generate encodings
-        # print('in else loop')
         os.makedirs(AUTHORIZED_ENCODINGS_DIR, exist_ok=True)
         for user_dir in os.listdir(AUTHORIZED_USERS_DIR):
-            # print(f'user_dir: {user_dir}')
             user_path = os.path.join(AUTHORIZED_USERS_DIR, user_dir)
-            # print(f'user_path: {user_path}')
             user_encodings_dir = os.path.join(AUTHORIZED_ENCODINGS_DIR, user_dir)
-            # print(f'user_encodings_dir: {user_encodings_dir}')
             os.makedirs(user_encodings_dir, exist_ok=True)
             user_encodings = []
+
             for image_file in os.listdir(user_path):
                 image_path = os.path.join(user_path, image_file)
-                # print(f'image_path: {image_path}')
                 image = face_recognition.load_image_file(image_path)
                 encodings = face_recognition.face_encodings(image)
+
                 if encodings:
                     encoding = encodings[0]
-                    # print(f'encoding: {encoding}')
                     user_encodings.append(encoding)
-                    # Save encoding
                     encoding_file_path = os.path.join(user_encodings_dir, image_file + "_Encoding")
+
                     with open(encoding_file_path, 'wb') as f:
                         pickle.dump(encoding, f)
-                # else:
-                #     print(f"No face encodings found in {image_file}. Skipping.")
+
             authorized_encodings[user_dir] = user_encodings
-        # print('else bitişi')
+
     return authorized_encodings
 
 
@@ -221,7 +171,7 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
         ret, frame = cap.read()
 
         if not ret:
-            # if not ret cap.read() doesn't return a frame, meaning there is a problem. which is mostly the camera being already used
+            # if cap.read() doesn't return a frame, meaning there is a problem. which is mostly the camera being already used
             message = f"{camera} numaralı kamera şu anda kullanımda veya başka bir hata oluştu."
             show_error_message(message)
             sys.exit(message)
@@ -236,13 +186,9 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
             # face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations, model='hog') # takes all the time
             faces = []
             for top, right, bottom, left in face_locations:
-                # Debugging: Print slicing indices
-                # print("Cropping with:", top, right, bottom, left)
                 if 0 <= top < bottom <= rgb_small_frame.shape[0] and 0 <= left < right <= rgb_small_frame.shape[1]:
                     face = rgb_small_frame[top:bottom, left:right]
                     faces.append(face)
-                # else:
-                #     print("Invalid face location skipped:", top, right, bottom, left)
 
             # recognition part
 
@@ -265,22 +211,21 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                 )
 
                 if block_multi_user:
-                    # print('yes block_multi_user')
                     # order of these two ifs can be used in block_multi_user??
                     if not any(matches):
                         unauthorized_detected = True
                         break
 
-                    if any(matches):  # This condition is met if an authorized person is detected
-                        # print("Authorized person detected. Stopping capture.")
+                    if any(matches):  
+                        print("Authorized person detected. Stopping capture.")
                         authorized_detected = True
-                        break  # Exit the loop to stop capturing
+                        break  
                 else:
                     print('no block_multi_user')
-                    if any(matches):  # This condition is met if an authorized person is detected
-                        # print("Authorized person detected. Stopping capture.")
+                    if any(matches):  
+                        print("Authorized person detected. Stopping capture.")
                         authorized_detected = True
-                        break  # Exit the loop to stop capturing
+                        break  
 
                     if not any(matches):
                         unauthorized_detected = True
@@ -297,7 +242,6 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                 break
 
             if show_frame:
-                # time.sleep(5)
                 for top, right, bottom, left in face_locations:
                     top *= 4; right *= 4; bottom *= 4; left *= 4 
                     cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
@@ -310,7 +254,6 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
     # cap.release()
     if show_frame:
         cv2.destroyAllWindows()
-
 
 
 def capture_loop(camera: str, show_frame: str, wait_time, capture_duration: int, block_multi_user: bool):
@@ -332,7 +275,7 @@ def capture_loop(camera: str, show_frame: str, wait_time, capture_duration: int,
         # threading.Timer(wait_time, capture_callback).start(),
     while True:
         capture(camera, show_frame, capture_duration, block_multi_user, cap)
-        time.sleep(wait_time)  
+        time.sleep(wait_time)
 
 
 def main():
