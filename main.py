@@ -10,6 +10,7 @@ from concurrent.futures import ProcessPoolExecutor
 import os
 import pickle
 from datetime import datetime
+import subprocess
 
 THRESHOLD = 0.6
 AUTHORIZED_USERS_DIR = 'authorized_users'
@@ -19,7 +20,6 @@ running = True
 process_current_frame = True
 authorized_encodings = {}
 
-# TODO: to exe? is it the way to not running on lockscreen and terminating in a different way than it is now?
 # TODO: divide into different modules? main, capture, utils...
 # TODO: use count, don't delete initial photos, read from json... 
 # TODO: if none, then halt
@@ -28,6 +28,7 @@ authorized_encodings = {}
 # TODO: authorized_users klasörü yoksa tanımlama ekranı, isim girme, isimden dir oluştur, fotoğraf çektirme, foto ekle, eğit... 
 #   UI, tanımlama sayısı da  settings
 # TODO: kamera seçtirme devid, concurrent with the former one
+# TODO: if flow starts from the point which auth_users image folder does not exist it also should do the encodings
 
 """
 test cases:
@@ -39,21 +40,67 @@ halt while:
     DONE unauth detecting
 """
 
-def ask_user_name():
-    # Create a Tk root widget
-    root = tk.Tk()
-    root.withdraw()  # We don't want a full GUI, so keep the root window from appearing
 
-    # Show an input box and return the value entered by the user
+def ask_camera_selection(camera_names):
+    def on_select():
+        selected_index.set(camera_names.index(cameras_listbox.get(cameras_listbox.curselection())))
+        root.destroy()
+
+    root = tk.Tk()
+    root.title("Select Camera")
+    selected_index = tk.IntVar(value=0)  # default 
+
+    cameras_listbox = tk.Listbox(root)
+    cameras_listbox.pack()
+
+    for name in camera_names:
+        cameras_listbox.insert(tk.END, name)
+
+    select_button = tk.Button(root, text="Select", command=on_select)
+    select_button.pack()
+
+    root.mainloop()
+    return selected_index.get()
+
+
+def list_cameras(max_checks=10):
+    available_cameras = []
+    for i in range(max_checks):
+        cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+        if cap.isOpened():
+            available_cameras.append(i)
+            cap.release()
+    return available_cameras
+
+
+def list_cameras_with_powershell():
+    command = ["powershell", "-Command", "Get-CimInstance Win32_PnPEntity | ? { $_.service -eq 'usbvideo' } | Select-Object -Property Name"]
+    result = subprocess.run(command, capture_output=True, text=True)
+    
+    camera_names = [line.strip() for line in result.stdout.split('\n') if line.strip()]
+    camera_names.remove('Name')
+    camera_names.remove('----')
+    
+    return camera_names
+
+
+def ask_user_name():
+    root = tk.Tk()
+    root.withdraw()  
+
     user_name = simpledialog.askstring("Name", "Please enter your name:")
     
-    # Destroy the root window
     root.destroy()
     
     return user_name
 
 
 def check_authorized_users(user_image_count: int):
+    """
+    This function is intended to run only in the case which there is no authorized_users folder is prepared before the initial run of the code,
+    which is actually opposite of the advised usage. 
+    MUST CLARIFY THE ACTUAL USAGE SCENARIOS
+    """
     if not os.path.exists(AUTHORIZED_USERS_DIR):
         os.makedirs(AUTHORIZED_USERS_DIR)
         user_name = ask_user_name()
@@ -61,22 +108,34 @@ def check_authorized_users(user_image_count: int):
         os.makedirs(user_dir)
 
         # camera selection part
-        camera_index = 0
-        cap = cv2.VideoCapture(camera_index)
+        camera_names = list_cameras_with_powershell()
+        selected_camera_index = ask_camera_selection(camera_names)
+        # write to json file
+        opencv_camera_index = list_cameras()[selected_camera_index]
+
+        cap = cv2.VideoCapture(opencv_camera_index)
 
         # capture photo
         for i in range(user_image_count):
-            ret, frame = cap.read()
-            if not ret:
-                print("Failed to capture image")
-                continue
-            cv2.imshow('Capture Photo', frame)
-            cv2.waitKey(0) 
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    print("Failed to capture image")
+                    break
+                cv2.imshow('Capture Photo', frame)
 
-            # save photo
-            photo_path = os.path.join(user_dir, f"{user_name}_init_{i+1}.jpg")
-            cv2.imwrite(photo_path, frame)
-            print(f"Photo saved: {photo_path}")
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('s'):
+                    # save photo
+                    photo_path = os.path.join(user_dir, f"{user_name}_init_{i+1}.jpg")
+                    cv2.imwrite(photo_path, frame)
+                    print(f"Photo saved: {photo_path}")
+                    break  
+                elif key == ord('q'):  # to quit
+                    break
+
+            if key == ord('q'):  
+                break
 
         cap.release()
         cv2.destroyAllWindows()
