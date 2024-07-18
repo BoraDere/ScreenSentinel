@@ -3,11 +3,13 @@ import cv2
 import face_recognition
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import simpledialog
 import time
 import sys
 from concurrent.futures import ProcessPoolExecutor
 import os
 import pickle
+from datetime import datetime
 
 THRESHOLD = 0.6
 AUTHORIZED_USERS_DIR = 'authorized_users'
@@ -18,15 +20,14 @@ process_current_frame = True
 authorized_encodings = {}
 
 # TODO: to exe? is it the way to not running on lockscreen and terminating in a different way than it is now?
-# TODO: make settings_reader parse the arguments in he required format, exception handling for settings file name
 # TODO: divide into different modules? main, capture, utils...
-# TODO: count sayısına göre encodeları baştan yap, dosya varsa oku yoksa oluştur. count sayısı sadece bir kişi için yeterli
 # TODO: use count, don't delete initial photos, read from json... 
-# TODO: general log system
 # TODO: if none, then halt
-# TODO: disposal system
 # TODO: avoid process kill
-# TODO: authorized_users klasörü yoksa tanımlama ekranı, isim girme, isimden dir oluştur, fotoğraf çektirme, foto ekle, eğit... UI, tanımlama sayısı da  settings
+# TODO: count sayısına göre encodeları baştan yap, dosya varsa oku yoksa oluştur. count sayısı sadece bir kişi için yeterli
+# TODO: authorized_users klasörü yoksa tanımlama ekranı, isim girme, isimden dir oluştur, fotoğraf çektirme, foto ekle, eğit... 
+#   UI, tanımlama sayısı da  settings
+# TODO: kamera seçtirme devid, concurrent with the former one
 
 """
 test cases:
@@ -37,6 +38,54 @@ halt while:
     DONE nth capturing
     DONE unauth detecting
 """
+
+def ask_user_name():
+    # Create a Tk root widget
+    root = tk.Tk()
+    root.withdraw()  # We don't want a full GUI, so keep the root window from appearing
+
+    # Show an input box and return the value entered by the user
+    user_name = simpledialog.askstring("Name", "Please enter your name:")
+    
+    # Destroy the root window
+    root.destroy()
+    
+    return user_name
+
+
+def check_authorized_users(user_image_count: int):
+    if not os.path.exists(AUTHORIZED_USERS_DIR):
+        os.makedirs(AUTHORIZED_USERS_DIR)
+        user_name = ask_user_name()
+        user_dir = os.path.join(AUTHORIZED_USERS_DIR, user_name)
+        os.makedirs(user_dir)
+
+        # camera selection part
+        camera_index = 0
+        cap = cv2.VideoCapture(camera_index)
+
+        # capture photo
+        for i in range(user_image_count):
+            ret, frame = cap.read()
+            if not ret:
+                print("Failed to capture image")
+                continue
+            cv2.imshow('Capture Photo', frame)
+            cv2.waitKey(0) 
+
+            # save photo
+            photo_path = os.path.join(user_dir, f"{user_name}_init_{i+1}.jpg")
+            cv2.imwrite(photo_path, frame)
+            print(f"Photo saved: {photo_path}")
+
+        cap.release()
+        cv2.destroyAllWindows()
+
+
+def logger(log: str, type: str) -> None:
+    with open('logs.txt', 'a') as w:
+        dt = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        w.write(f'[{dt}] {type}: {log}\n')
 
 
 def str_to_bool(value: str) -> bool:
@@ -54,8 +103,9 @@ def str_to_bool(value: str) -> bool:
     elif value.lower() == 'false':
         return False
     else:
-        message = f'Formata uymayan ayar: "{value}". Ayarları kontrol edin.'
+        message = f'Value does not fit the format: "{value}". Check the settings.'
         show_error_message(message)
+        logger(message, 'ERROR')
         sys.exit()
 
 
@@ -68,11 +118,11 @@ def show_error_message(message: str) -> None:
     """
     root = tk.Tk()
     root.withdraw() 
-    messagebox.showerror("HATA", message)
+    messagebox.showerror("ERROR", message)
     root.destroy()
 
 
-def encode_face(face_image) -> list|None:
+def encode_face(face_image) -> list | None:
     """
     Function to encode faces using face_recognition.
 
@@ -130,7 +180,7 @@ def load_or_generate_encodings():
     return authorized_encodings
 
 
-def settings_reader(filename: str):
+def settings_reader(filename: str) -> (list | None):
     """
     A simple reader function.
 
@@ -141,7 +191,9 @@ def settings_reader(filename: str):
         with open(filename, 'r') as f:
             return json.load(f)
     except:
-        print('bulunamadı. dosyanın adı settings olmalı ve JSON formatında olmalıdır')
+        message = 'Settings file cannot be found. It must be names as "settings" and the file format must be JSON.'
+        print(message)
+        logger(message, 'ERROR')
         sys.exit()
 
 
@@ -160,7 +212,8 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
     
     # error while opening the camera
     if not cap.isOpened():
-        message = f"{camera} numaralı kamera açılamadı. Bu kameranın sistemde var olduğuna emin olun."
+        message = f"Camera {camera} cannot be used. Be sure that this device exists."
+        logger(message, 'ERROR')
         show_error_message(message)
         sys.exit(message)
 
@@ -172,7 +225,8 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
 
         if not ret:
             # if cap.read() doesn't return a frame, meaning there is a problem. which is mostly the camera being already used
-            message = f"{camera} numaralı kamera şu anda kullanımda veya başka bir hata oluştu."
+            message = f"Camera {camera} is being used or another error occured."
+            logger(message, 'ERROR')
             show_error_message(message)
             sys.exit(message)
 
@@ -216,14 +270,18 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                         unauthorized_detected = True
                         break
 
-                    if any(matches):  
-                        print("Authorized person detected. Stopping capture.")
+                    if any(matches):
+                        message = "Authorized person detected. Stopping capture."  
+                        print(message)
+                        logger(message, 'INFO')
                         authorized_detected = True
                         break  
                 else:
                     print('no block_multi_user')
                     if any(matches):  
-                        print("Authorized person detected. Stopping capture.")
+                        message = "Authorized person detected. Stopping capture."  
+                        print(message)
+                        logger(message, 'INFO')
                         authorized_detected = True
                         break  
 
@@ -235,7 +293,9 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
             if unauthorized_detected:
                 # change it from being an immediate action with window panes
                 # it shouldn't be running False, just screen lock
-                print("unauth detected")
+                message = "Unauthorized person detected. System goes to sleep."
+                print(message)
+                logger(message, 'INFO')
                 running = False
                 # UnboundLocalError: local variable 'running' referenced before assignment
                 # fixed but check again
@@ -286,11 +346,14 @@ def main():
     wait_time = settings['wait_time']
     capture_duration = settings['capture_duration']
     block_multi_user = str_to_bool(settings['block_multi_user'])
+    user_image_count = settings['user_image_count']
+    check_authorized_users(user_image_count)
     authorized_encodings = load_or_generate_encodings()
 
     try:
         capture_loop(camera, show_frame, wait_time, capture_duration, block_multi_user)
     except KeyboardInterrupt:
+        logger("Program terminated.", 'INFO')
         running = False
         print("Program terminated.")
         sys.exit()

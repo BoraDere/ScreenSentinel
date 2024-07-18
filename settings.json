@@ -1,5 +1,5 @@
 {
-    "camera": 0,
+    "camera": 1,
     "show_frame": "True",
     "count_limit": 20,
     "block_multi_user": "False",
