@@ -12,10 +12,17 @@ import constants
 
 running = True
 process_current_frame = True
-authorized_encodings = {}
+first_run = True
 
 
 ###################################### FUNCTIONS ######################################
+
+# count limite göre foto kaydetme:
+# 1- ilk çalıştırmada limite ulaşan var mı diye kontrol et
+# 2- ulaşan varsa encoding klasörünü sil, load fonk çalıştır, (mainde yap?), sonra init dışındaki tüm görselleri sil
+# 3- endif
+# 4- ulaşan yoksa ilk auth algılamasını ilgili kişinin klasörüne kaydet
+# 5- end else
 
 
 def encode_face(face_image) -> list | None:
@@ -82,7 +89,7 @@ def load_or_generate_encodings():
 #######################################################################################
 
 
-def capture(camera: str, show_frame: str, capture_duration: int, block_multi_user: bool, cap: cv2.VideoCapture, authorized_encodings) -> None:
+def capture(camera: str, show_frame: str, capture_duration: int, block_multi_user: bool, cap: cv2.VideoCapture, authorized_encodings, count_limit) -> None:
     """
     Main function that is responsible of capturing, detecting and recognizing.
 
@@ -151,27 +158,37 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
 
 
                 if block_multi_user:
-                    # order of these two ifs can be used in block_multi_user??
                     if not any(matches):
                         unauthorized_detected = True
                         break
 
                     if any(matches):
-                        message = "Authorized person detected. Stopping capture."  
+                        message = "Authorized person detected. Stopping capture."
                         print(message)
                         logger(message, 'INFO')
+                        if first_run:
+                            pass
                         authorized_detected = True
                         break  
                 else:
                     print('no block_multi_user')
+                    print(matches)
                     if any(matches):  
                         message = "Authorized person detected. Stopping capture."  
                         print(message)
                         logger(message, 'INFO')
+                        flag = False
+                        for b in matches:
+                            if b:
+                                flag = b
+
+                        if first_run and not any(matches):
+                            pass
                         authorized_detected = True
                         break  
 
                     if not any(matches):
+                        print('unauth')
                         unauthorized_detected = True
                         break
 
@@ -202,7 +219,7 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
 #######################################################################################
 
 
-def capture_loop(camera: str, show_frame: str, wait_time, capture_duration: int, block_multi_user: bool, authorized_encodings):
+def capture_loop(camera: str, show_frame: str, wait_time, capture_duration: int, block_multi_user: bool, authorized_encodings, count_limit):
     """
     Looping function for capture.
     """
@@ -213,5 +230,5 @@ def capture_loop(camera: str, show_frame: str, wait_time, capture_duration: int,
     cap = cv2.VideoCapture(camera)
     
     while True:
-        capture(camera, show_frame, capture_duration, block_multi_user, cap, authorized_encodings)
+        capture(camera, show_frame, capture_duration, block_multi_user, cap, authorized_encodings, count_limit)
         time.sleep(wait_time)

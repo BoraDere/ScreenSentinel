@@ -2,10 +2,6 @@ import sys
 from vision import *
 from utils import *
 
-THRESHOLD = 0.6
-AUTHORIZED_USERS_DIR = 'authorized_users'
-AUTHORIZED_ENCODINGS_DIR = 'authorized_user_encodings'
-
 running = True
 authorized_encodings = {}
 
@@ -36,11 +32,12 @@ def main():
     capture_duration = settings['capture_duration']
     block_multi_user = str_to_bool(settings['block_multi_user'])
     user_image_count = settings['user_image_count']
+    count_limit = settings['count_limit']
     check_authorized_users(user_image_count)
     authorized_encodings = load_or_generate_encodings()
 
     try:
-        capture_loop(camera, show_frame, wait_time, capture_duration, block_multi_user, authorized_encodings)
+        capture_loop(camera, show_frame, wait_time, capture_duration, block_multi_user, authorized_encodings, count_limit)
     except KeyboardInterrupt:
         logger("Program terminated.", 'INFO')
         running = False
