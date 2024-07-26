@@ -8,9 +8,36 @@ import os
 from datetime import datetime
 import subprocess
 import constants
+import shutil
+from send2trash import send2trash
 
 
 ###################################### FUNCTIONS ######################################
+
+
+def delete_images():
+    for user_dir in os.listdir(constants.AUTHORIZED_USERS_DIR):
+        user_path = os.path.join(constants.AUTHORIZED_USERS_DIR, user_dir)
+        for user_image in os.listdir(user_path):
+            if 'init' not in user_image:
+                image_path = os.path.join(user_path, user_image)
+                send2trash(image_path)
+
+
+#######################################################################################
+
+
+def check_count_limit(count_limit: int):
+    for user_dir in os.listdir(constants.AUTHORIZED_USERS_DIR):
+        user_path = os.path.join(constants.AUTHORIZED_USERS_DIR, user_dir)
+        user_length = len(os.listdir(user_path))
+        if user_length == count_limit:
+            shutil.rmtree(constants.AUTHORIZED_ENCODINGS_DIR)
+            return True
+    return False
+
+
+#######################################################################################
 
 
 def settings_reader(filename: str) -> (list | None):

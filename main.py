@@ -5,11 +5,11 @@ from utils import *
 running = True
 authorized_encodings = {}
 
-# TODO: use count, don't delete initial photos, read from json... 
 # TODO: if none, then halt
 # TODO: avoid process kill
-# TODO: count sayısına göre encodeları baştan yap, dosya varsa oku yoksa oluştur. count sayısı sadece bir kişi için yeterli
 
+# TODO: count sayısına göre encodeları baştan yap, dosya varsa oku yoksa oluştur. count sayısı sadece bir kişi için yeterli
+# TODO: use count, don't delete initial photos, read from json... 
 # TODO: ilk runsa, hiç unauth yoksa resim çek ve sete at HER GÜN this is the logic behind re-feeding
 
 """

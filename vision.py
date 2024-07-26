@@ -14,15 +14,7 @@ running = True
 process_current_frame = True
 first_run = True
 
-
 ###################################### FUNCTIONS ######################################
-
-# count limite göre foto kaydetme:
-# 1- ilk çalıştırmada limite ulaşan var mı diye kontrol et
-# 2- ulaşan varsa encoding klasörünü sil, load fonk çalıştır, (mainde yap?), sonra init dışındaki tüm görselleri sil
-# 3- endif
-# 4- ulaşan yoksa ilk auth algılamasını ilgili kişinin klasörüne kaydet
-# 5- end else
 
 
 def encode_face(face_image) -> list | None:
@@ -101,6 +93,7 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
     global running, process_current_frame
 
     authorized_detected = False
+    limit_reached = False
     
     # error while opening the camera
     if not cap.isOpened():
@@ -110,6 +103,22 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
         sys.exit(message)
 
     start_time = time.time()
+
+    if first_run:
+        limit_reached = check_count_limit(count_limit)
+        # if flag
+        # load_or_generate_encodings
+        # delete all images except the ones with "init" in their names
+        # endif#
+        # count limite göre foto kaydetme:
+        # 1- ilk çalıştırmada limite ulaşan var mı diye kontrol et
+        # 2- ulaşan varsa encoding klasörünü sil, load fonk çalıştır, (mainde yap?), sonra init dışındaki tüm görselleri sil
+        # 3- endif
+        # 4- ulaşan yoksa ilk auth algılamasını ilgili kişinin klasörüne kaydet
+        # 5- end else
+        if limit_reached:
+            authorized_encodings = load_or_generate_encodings()
+            delete_images()
 
     while time.time() - start_time < capture_duration and running and not authorized_detected:
     # while running and not authorized_detected:
@@ -166,7 +175,9 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                         message = "Authorized person detected. Stopping capture."
                         print(message)
                         logger(message, 'INFO')
-                        if first_run:
+                        if first_run and not limit_reached:
+                            # save photo
+                            first_run = not first_run
                             pass
                         authorized_detected = True
                         break  
@@ -177,15 +188,12 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                         message = "Authorized person detected. Stopping capture."  
                         print(message)
                         logger(message, 'INFO')
-                        flag = False
-                        for b in matches:
-                            if b:
-                                flag = b
-
-                        if first_run and not any(matches):
+                        if first_run and not limit_reached:
+                            # save photo
+                            first_run = not first_run
                             pass
                         authorized_detected = True
-                        break  
+                        break
 
                     if not any(matches):
                         print('unauth')
