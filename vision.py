@@ -17,6 +17,23 @@ first_run = True
 ###################################### FUNCTIONS ######################################
 
 
+def lock_screen():
+    os.system("rundll32.exe user32.dll,LockWorkStation")
+
+
+
+def save_image_to_user_directory(frame, user_name):
+    user_dir = os.path.join(constants.AUTHORIZED_USERS_DIR, user_name)
+
+    dt = datetime.now().strftime("%d%m%Y_%H%M%S")
+
+    photo_path = os.path.join(user_dir, f"{user_name}_{dt}.jpg")
+    cv2.imwrite(photo_path, frame)
+
+
+#######################################################################################
+
+
 def encode_face(face_image) -> list | None:
     """
     Function to encode faces using face_recognition.
@@ -90,7 +107,7 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
         show_frame(bool): Bool value of show_frame given in the settings file.
         capture_duration(int): Duration of capture.
     """
-    global running, process_current_frame
+    global running, process_current_frame, first_run
 
     authorized_detected = False
     limit_reached = False
@@ -103,6 +120,9 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
         sys.exit(message)
 
     start_time = time.time()
+    user_names = []
+    for user, encodings in authorized_encodings.items():
+        user_names.extend([user] * len(encodings))
 
     if first_run:
         limit_reached = check_count_limit(count_limit)
@@ -121,7 +141,7 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
             delete_images()
 
     while time.time() - start_time < capture_duration and running and not authorized_detected:
-    # while running and not authorized_detected:
+        
         ret, frame = cap.read()
 
         if not ret:
@@ -176,9 +196,10 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                         print(message)
                         logger(message, 'INFO')
                         if first_run and not limit_reached:
-                            # save photo
+                            matched_user_index = matches.index(True)
+                            matched_user_name = user_names[matched_user_index]
+                            save_image_to_user_directory(frame, matched_user_name)
                             first_run = not first_run
-                            pass
                         authorized_detected = True
                         break  
                 else:
@@ -189,9 +210,10 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                         print(message)
                         logger(message, 'INFO')
                         if first_run and not limit_reached:
-                            # save photo
+                            matched_user_index = matches.index(True)
+                            matched_user_name = user_names[matched_user_index]
+                            save_image_to_user_directory(frame, matched_user_name)
                             first_run = not first_run
-                            pass
                         authorized_detected = True
                         break
 
@@ -206,17 +228,17 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                 message = "Unauthorized person detected. System goes to sleep."
                 print(message)
                 logger(message, 'INFO')
-                running = False
-                break
+                # running = False
+                lock_screen()
+                continue
 
             if show_frame:
                 for top, right, bottom, left in face_locations:
                     top *= 4; right *= 4; bottom *= 4; left *= 4 
                     cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
             cv2.imshow('Webcam', frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'): # for debugging purposes
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-
         process_current_frame = not process_current_frame # unbound bunun yüzünden
 
     # cap.release()

@@ -15,6 +15,9 @@ from send2trash import send2trash
 ###################################### FUNCTIONS ######################################
 
 
+#######################################################################################
+
+
 def delete_images():
     for user_dir in os.listdir(constants.AUTHORIZED_USERS_DIR):
         user_path = os.path.join(constants.AUTHORIZED_USERS_DIR, user_dir)

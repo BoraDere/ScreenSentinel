@@ -6,11 +6,6 @@ running = True
 authorized_encodings = {}
 
 # TODO: if none, then halt
-# TODO: avoid process kill
-
-# TODO: count sayısına göre encodeları baştan yap, dosya varsa oku yoksa oluştur. count sayısı sadece bir kişi için yeterli
-# TODO: use count, don't delete initial photos, read from json... 
-# TODO: ilk runsa, hiç unauth yoksa resim çek ve sete at HER GÜN this is the logic behind re-feeding
 
 """
 test cases:
@@ -34,6 +29,7 @@ def main():
     user_image_count = settings['user_image_count']
     count_limit = settings['count_limit']
     check_authorized_users(user_image_count)
+    _ = check_count_limit(count_limit)
     authorized_encodings = load_or_generate_encodings()
 
     try:
