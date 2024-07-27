@@ -1,25 +1,14 @@
 import sys
-from vision import *
-from utils import *
+from vision import load_or_generate_encodings, capture_loop
+from utils import settings_reader, str_to_bool, logger, check_authorized_users, check_count_limit
 
 running = True
 authorized_encodings = {}
 
-# TODO: if none, then halt
-
-"""
-test cases:
-halt while:
-    DONE capturing tick
-    DONE initializing auth encodings tick
-    after the capturing tickkk
-    DONE nth capturing
-    DONE unauth detecting
-"""
-
 
 def main():
     global authorized_encodings, running
+
     settings = settings_reader('settings.json')
     camera = settings['camera']
     show_frame = str_to_bool(settings['show_frame'])
@@ -34,10 +23,10 @@ def main():
 
     try:
         capture_loop(camera, show_frame, wait_time, capture_duration, block_multi_user, authorized_encodings, count_limit)
+    # to terminate the program manually
     except KeyboardInterrupt:
         logger("Program terminated.", 'INFO')
         running = False
-        print("Program terminated.")
         sys.exit()
 
 

@@ -5,7 +5,7 @@ import sys
 from concurrent.futures import ProcessPoolExecutor
 import os
 import pickle
-from utils import *
+from utils import logger, show_error_message, check_count_limit, delete_images, lock_screen, save_image_to_user_directory
 import constants
 
 ######################################## FLAGS ########################################
@@ -15,23 +15,6 @@ process_current_frame = True
 first_run = True
 
 ###################################### FUNCTIONS ######################################
-
-
-def lock_screen():
-    os.system("rundll32.exe user32.dll,LockWorkStation")
-
-
-
-def save_image_to_user_directory(frame, user_name):
-    user_dir = os.path.join(constants.AUTHORIZED_USERS_DIR, user_name)
-
-    dt = datetime.now().strftime("%d%m%Y_%H%M%S")
-
-    photo_path = os.path.join(user_dir, f"{user_name}_{dt}.jpg")
-    cv2.imwrite(photo_path, frame)
-
-
-#######################################################################################
 
 
 def encode_face(face_image) -> list | None:
@@ -44,8 +27,9 @@ def encode_face(face_image) -> list | None:
     Returns:
         encodings: Face encoding if face_encodings didn't return None, else None.
     """
-    # using hog model to increase the performance a bit
+    # Using hog model to increase the performance a bit
     encodings = face_recognition.face_encodings(face_image, model='hog')
+
     if encodings:
         return encodings[0]
     else:
@@ -55,9 +39,13 @@ def encode_face(face_image) -> list | None:
 #######################################################################################
 
 
-def load_or_generate_encodings():
+def load_or_generate_encodings() -> dict:
+    """
+    The function that checks if authorized_encodings dictionary should be loaded or generated.
+    """
     authorized_encodings = {}
 
+    # If path exists load data from files
     if os.path.exists(constants.AUTHORIZED_ENCODINGS_DIR):
         for user_dir in os.listdir(constants.AUTHORIZED_ENCODINGS_DIR):
             user_encodings = []
@@ -68,7 +56,9 @@ def load_or_generate_encodings():
                     encoding = pickle.load(f)
                     user_encodings.append(encoding)
 
-            authorized_encodings[user_dir] = user_encodings            
+            authorized_encodings[user_dir] = user_encodings
+
+    # Else, create the directory and write encoding files       
     else:
         os.makedirs(constants.AUTHORIZED_ENCODINGS_DIR, exist_ok=True)
         for user_dir in os.listdir(constants.AUTHORIZED_USERS_DIR):
@@ -98,21 +88,25 @@ def load_or_generate_encodings():
 #######################################################################################
 
 
-def capture(camera: str, show_frame: str, capture_duration: int, block_multi_user: bool, cap: cv2.VideoCapture, authorized_encodings, count_limit) -> None:
+def capture(camera: int, show_frame: bool, capture_duration: int, block_multi_user: bool, cap: cv2.VideoCapture, authorized_encodings: dict, count_limit: int) -> None:
     """
     Main function that is responsible of capturing, detecting and recognizing.
 
     Args:
-        camera(str): ID of camera given in the settings file.
+        camera(int): ID of camera given in the settings file.
         show_frame(bool): Bool value of show_frame given in the settings file.
-        capture_duration(int): Duration of capture.
+        capture_duration(int): Duration of capture in seconds.
+        block_multi_user(bool): Setting states if the program should block multi user occurence.
+        cap(cv2.VideoCapture): Capture variable.
+        authorized_encodings(dict): Dictionary that consists encodings of authorized users.
+        count_limit: Upper limit of photo amount per user.
     """
     global running, process_current_frame, first_run
 
     authorized_detected = False
     limit_reached = False
     
-    # error while opening the camera
+    # Error while opening the camera
     if not cap.isOpened():
         message = f"Camera {camera} cannot be used. Be sure that this device exists."
         logger(message, 'ERROR')
@@ -121,21 +115,13 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
 
     start_time = time.time()
     user_names = []
+
     for user, encodings in authorized_encodings.items():
         user_names.extend([user] * len(encodings))
 
     if first_run:
         limit_reached = check_count_limit(count_limit)
-        # if flag
-        # load_or_generate_encodings
-        # delete all images except the ones with "init" in their names
-        # endif#
-        # count limite göre foto kaydetme:
-        # 1- ilk çalıştırmada limite ulaşan var mı diye kontrol et
-        # 2- ulaşan varsa encoding klasörünü sil, load fonk çalıştır, (mainde yap?), sonra init dışındaki tüm görselleri sil
-        # 3- endif
-        # 4- ulaşan yoksa ilk auth algılamasını ilgili kişinin klasörüne kaydet
-        # 5- end else
+
         if limit_reached:
             authorized_encodings = load_or_generate_encodings()
             delete_images()
@@ -145,34 +131,28 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
         ret, frame = cap.read()
 
         if not ret:
-            # if cap.read() doesn't return a frame, meaning there is a problem. which is mostly the camera being already used
+            # If cap.read() doesn't return a frame meaning there is a problem, which is mostly the camera being already used
             message = f"Camera {camera} is being used or another error occured."
             logger(message, 'ERROR')
             show_error_message(message)
             sys.exit(message)
 
         if process_current_frame:
-            # performance-wise operation
             small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)            
             rgb_small_frame = small_frame[:, :, ::-1]  # BGR to RGB conversion
             face_locations = face_recognition.face_locations(rgb_small_frame, model='hog')
-            # debugging
-            # print("Face locations:", face_locations)
-            # face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations, model='hog') # takes all the time
+
+            # face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations, model='hog')
             faces = []
             for top, right, bottom, left in face_locations:
                 if 0 <= top < bottom <= rgb_small_frame.shape[0] and 0 <= left < right <= rgb_small_frame.shape[1]:
                     face = rgb_small_frame[top:bottom, left:right]
                     faces.append(face)
 
-            # recognition part
-
             if faces:
                 with ProcessPoolExecutor() as executor:
                     face_encodings = list(executor.map(encode_face, faces))
             else:
-                # so that compare_faces won't receive None
-                # kinda unnecessary thanks to valid_face_encodings, check if this is the case
                 face_encodings = []
 
             unauthorized_detected = False
@@ -185,7 +165,6 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                     tolerance=constants.THRESHOLD,
                 )
 
-
                 if block_multi_user:
                     if not any(matches):
                         unauthorized_detected = True
@@ -193,7 +172,6 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
 
                     if any(matches):
                         message = "Authorized person detected. Stopping capture."
-                        print(message)
                         logger(message, 'INFO')
                         if first_run and not limit_reached:
                             matched_user_index = matches.index(True)
@@ -203,11 +181,8 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                         authorized_detected = True
                         break  
                 else:
-                    print('no block_multi_user')
-                    print(matches)
                     if any(matches):  
                         message = "Authorized person detected. Stopping capture."  
-                        print(message)
                         logger(message, 'INFO')
                         if first_run and not limit_reached:
                             matched_user_index = matches.index(True)
@@ -218,15 +193,12 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                         break
 
                     if not any(matches):
-                        print('unauth')
                         unauthorized_detected = True
                         break
 
 
             if unauthorized_detected:
-                # it shouldn't be running False, just screen lock
                 message = "Unauthorized person detected. System goes to sleep."
-                print(message)
                 logger(message, 'INFO')
                 # running = False
                 lock_screen()
@@ -236,10 +208,16 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
                 for top, right, bottom, left in face_locations:
                     top *= 4; right *= 4; bottom *= 4; left *= 4 
                     cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-            cv2.imshow('Webcam', frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-        process_current_frame = not process_current_frame # unbound bunun yüzünden
+                cv2.imshow('Webcam', frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+        process_current_frame = not process_current_frame 
+
+    if not authorized_detected:
+        message = "No authorized person detected. System goes to sleep."
+        logger(message, 'INFO')
+        lock_screen()
 
     # cap.release()
     if show_frame:
@@ -249,11 +227,21 @@ def capture(camera: str, show_frame: str, capture_duration: int, block_multi_use
 #######################################################################################
 
 
-def capture_loop(camera: str, show_frame: str, wait_time, capture_duration: int, block_multi_user: bool, authorized_encodings, count_limit):
+def capture_loop(camera: int, show_frame: bool, wait_time: int, capture_duration: int, block_multi_user: bool, authorized_encodings: dict, count_limit: int):
     """
     Looping function for capture.
+    
+    Args:
+        camera(int): ID of camera given in the settings file.
+        show_frame(bool): Bool value of show_frame given in the settings file.
+        wait_time(int): Time of sleeping in seconds.
+        capture_duration(int): Duration of capture in seconds.
+        block_multi_user(bool): Setting states if the program should block multi user occurence.
+        authorized_encodings(dict): Dictionary that consists encodings of authorized users.
+        count_limit: Upper limit of photo amount per user.
     """
     global running
+
     if not running:  
         return
     

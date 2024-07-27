@@ -15,13 +15,44 @@ from send2trash import send2trash
 ###################################### FUNCTIONS ######################################
 
 
+def lock_screen() -> None:
+    """
+    A really simple function to lock the screen.
+    """
+    os.system("rundll32.exe user32.dll,LockWorkStation")
+
+
 #######################################################################################
 
 
-def delete_images():
+def save_image_to_user_directory(frame: cv2.numpy.ndarray, user_name: str) -> None:
+    """
+    Function that saves the image taken with the format of f"{user_name}_{dt}.jpg"
+
+    Args:
+        frame(numpy.ndarray): Captured frame at that moment.
+        user_name(str): User name.
+    """
+    user_dir = os.path.join(constants.AUTHORIZED_USERS_DIR, user_name)
+
+    # Using datetime so all images can have unique names
+    dt = datetime.now().strftime("%d%m%Y_%H%M%S")
+
+    photo_path = os.path.join(user_dir, f"{user_name}_{dt}.jpg")
+    cv2.imwrite(photo_path, frame)
+
+
+#######################################################################################
+
+
+def delete_images() -> None:
+    """
+    Function that deletes all images added latterly.
+    """
     for user_dir in os.listdir(constants.AUTHORIZED_USERS_DIR):
         user_path = os.path.join(constants.AUTHORIZED_USERS_DIR, user_dir)
         for user_image in os.listdir(user_path):
+            # Should not delete initial images because they tend to be the best ones
             if 'init' not in user_image:
                 image_path = os.path.join(user_path, user_image)
                 send2trash(image_path)
@@ -30,7 +61,17 @@ def delete_images():
 #######################################################################################
 
 
-def check_count_limit(count_limit: int):
+def check_count_limit(count_limit: int) -> bool:
+    """
+    Function that checks if the count limit is reached.
+
+    Args:
+        count_limit(int): Image count limit per user, defined in the settings file.
+
+    Returns:
+        True if one user has reached the limit.
+        Else, False.
+    """
     for user_dir in os.listdir(constants.AUTHORIZED_USERS_DIR):
         user_path = os.path.join(constants.AUTHORIZED_USERS_DIR, user_dir)
         user_length = len(os.listdir(user_path))
@@ -54,8 +95,7 @@ def settings_reader(filename: str) -> (list | None):
         with open(filename, 'r') as f:
             return json.load(f)
     except:
-        message = 'Settings file cannot be found. It must be names as "settings" and the file format must be JSON.'
-        print(message)
+        message = 'Settings file cannot be found. It must be named as "settings" and the file format must be JSON.'
         logger(message, 'ERROR')
         sys.exit()
 
@@ -64,6 +104,13 @@ def settings_reader(filename: str) -> (list | None):
 
 
 def logger(log: str, type: str) -> None:
+    """
+    Function that does the logging processes.
+
+    Args:
+        log(str): Logging information.
+        type(str): Logging type.
+    """
     with open('logs.txt', 'a') as w:
         dt = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         w.write(f'[{dt}] {type}: {log}\n')
@@ -88,7 +135,7 @@ def show_error_message(message: str) -> None:
 #######################################################################################
 
 
-def str_to_bool(value: str) -> bool:
+def str_to_bool(value: str) -> (bool | None):
     """
     A simple function that converts an str value to bool and returns it.
 
@@ -112,7 +159,16 @@ def str_to_bool(value: str) -> bool:
 #######################################################################################
 
 
-def ask_camera_selection(camera_names):
+def ask_camera_selection(camera_names: list) -> int:
+    """
+    Function that lists available cameras.
+
+    Args:
+        camera_names(list): Available camera names.
+
+    Returns:
+        (int): Index of the selected camera.
+    """
     def on_select():
         selected_index.set(camera_names.index(cameras_listbox.get(cameras_listbox.curselection())))
         root.destroy()
@@ -137,10 +193,21 @@ def ask_camera_selection(camera_names):
 #######################################################################################
 
 
-def list_cameras(max_checks=10):
+def list_cameras(max_checks=10) -> list:
+    """
+    Function to check all available cameras. This cannot be easily done on Python, so this is a runaround 
+    that checks if the camera with the selected index returns anything in the amount of max_checks.
+
+    Args:
+        max_checks(int): Upper limit of checks.
+
+    Returns:
+        (list): List of available camera indices.
+    """
     available_cameras = []
     for i in range(max_checks):
         cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+        # This means there is a camera installed with this index
         if cap.isOpened():
             available_cameras.append(i)
             cap.release()
@@ -150,7 +217,13 @@ def list_cameras(max_checks=10):
 #######################################################################################
 
 
-def list_cameras_with_powershell():
+def list_cameras_with_powershell() -> list:
+    """
+    Function that gets available camera names using a powershell command as a subprocess.
+
+    Returns:
+        (list): List of available camera names.
+    """
     command = ["powershell", "-Command", "Get-CimInstance Win32_PnPEntity | ? { $_.service -eq 'usbvideo' } | Select-Object -Property Name"]
     result = subprocess.run(command, capture_output=True, text=True)
     
@@ -164,7 +237,13 @@ def list_cameras_with_powershell():
 #######################################################################################
 
 
-def ask_user_name():
+def ask_user_name() -> str:
+    """
+    Function that asks for a user name.
+
+    Returns:
+        (str): User name.
+    """
     root = tk.Tk()
     root.withdraw()  
 
@@ -178,11 +257,14 @@ def ask_user_name():
 #######################################################################################
 
 
-def check_authorized_users(user_image_count: int):
+def check_authorized_users(user_image_count: int) -> None:
     """
     This function is intended to run only in the case which there is no authorized_users folder is prepared before the initial run of the code,
     which is actually opposite of the advised usage. 
     MUST CLARIFY THE ACTUAL USAGE SCENARIOS
+
+    Args:
+        user_image_count(int): Amount of images that the user is asked to take.
     """
     if not os.path.exists(constants.AUTHORIZED_USERS_DIR):
         os.makedirs(constants.AUTHORIZED_USERS_DIR)
@@ -190,10 +272,9 @@ def check_authorized_users(user_image_count: int):
         user_dir = os.path.join(constants.AUTHORIZED_USERS_DIR, user_name)
         os.makedirs(user_dir)
 
-        # camera selection part
+        # Camera selection part
         camera_names = list_cameras_with_powershell()
         selected_camera_index = ask_camera_selection(camera_names)
-        # TESTTTT
         opencv_camera_index = list_cameras()[selected_camera_index]
 
         with open('settings.json', 'r') as f:
@@ -206,21 +287,21 @@ def check_authorized_users(user_image_count: int):
 
         cap = cv2.VideoCapture(opencv_camera_index)
 
-        # capture photo
+        # Capture photo
         for i in range(user_image_count):
             while True:
                 ret, frame = cap.read()
                 if not ret:
-                    print("Failed to capture image")
+                    logger("Failed to capture image", "ERROR")
                     break
                 cv2.imshow('Capture Photo', frame)
 
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('s'):
-                    # save photo
+                    # Save photo
                     photo_path = os.path.join(user_dir, f"{user_name}_init_{i+1}.jpg")
                     cv2.imwrite(photo_path, frame)
-                    print(f"Photo saved: {photo_path}")
+                    logger(f"Photo saved: {photo_path}", "INFO")
                     break  
                 elif key == ord('q'):  # to quit
                     break
