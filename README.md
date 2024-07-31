@@ -59,3 +59,4 @@ If any initial photos are not provided, photo taking screen will appear. It will
 # Known Issues and Limitations
 * As stated before, this was designed for slow machines mainly. If you enable `show_frame` and observe the capturing and recognizing system, video might (and probably will) struggle quite a bit.
 * Since this project was part of my internship it is designed for Windows machines. Some functionalities will only work on Windows machines, thus whole program works only on Windows. Same functionalities can easily be implemented to work for other operating systems but this was simply not considered since it was not in the scope of my internship.
+* For the same reason with the first point, this program uses a model ran on CPU. Which is actually the main reason of those struggles in the video. It may also cause some faulty detections, you can simply increase threshold for your convenience.
