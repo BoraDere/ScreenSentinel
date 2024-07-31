@@ -45,6 +45,8 @@ All initially created images should have `init` in their name, since they will m
 
 If any initial photos are not provided, photo taking screen will appear. It will ask for a user name, make you select a camera, then ask you to take photos for the amount stated in the settings file. Press `s` to take photos, and `q` to exit that screen, if you do not want to take more photos. As you can guess, at least 1 photo is necessary.
 
+If you want to terminate the program, simple KeyboardInterrupt will suffice.
+
 ## Settings
 * camera: Index of the camera will be used. 0 is the default value and states the primary camera. Data type must be integer.
 * show_frame: States if the frame should be shown during process. This is for debugging only, default is False.
