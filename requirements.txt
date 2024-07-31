@@ -1,0 +1,4 @@
+opencv-python==4.10.0
+face_recognition==1.2.3
+send2trash
+numpy==1.26.4
